@@ -269,7 +269,7 @@ Definida em `sql/schema.sql`:
 | `vw_diferenca_grupo` (view) | 740 | Taxa por ano, grande área, sexo e raça/cor, e a diferença para os homens brancos, o maior grupo (67.042 propostas) |
 | `vw_reconciliacao_fontes` (view) | 137 | Totais do painel e do CSV lado a lado por ano, grande área e linha de fomento |
 
-Tipos: `SMALLINT` para ano e chaves das dimensões, `NUMERIC(16,2)` para dinheiro (sem erro de arredondamento de ponto flutuante) e `BOOLEAN` para atendido. Numa carga de teste em PostgreSQL 17 o banco ficou com 32 MB, bem abaixo da meta de 650 MB da Etapa 1 e do disco de 1 GB do plano gratuito.
+Tipos: `SMALLINT` para ano e chaves das dimensões, `NUMERIC(16,2)` para dinheiro (sem erro de arredondamento de ponto flutuante) e `BOOLEAN` para atendido. Carregado no Aiven, o banco ocupa 32 MB, bem abaixo da meta de 650 MB da Etapa 1 e do disco de 1 GB do plano gratuito.
 
 ## 5. Infraestrutura
 
@@ -278,8 +278,8 @@ Tipos: `SMALLINT` para ano e chaves das dimensões, `NUMERIC(16,2)` para dinheir
 | Item | Escolha | Por quê |
 |---|---|---|
 | Banco de dados | Aiven for PostgreSQL, plano `free-1-1gb` | Gratuito sem prazo e sem cartão de crédito, gerenciado, com backup e TLS. O RDS da AWS exige cartão e o nível gratuito é temporário |
-| Região | `aws-us-east-1` | O plano gratuito não é oferecido na América do Sul; essa é a região gratuita mais próxima de Salvador |
-| Infraestrutura como código | Terraform 1.7+ com os providers `aiven/aiven` (~> 4.65) e `hashicorp/local` (~> 2.5) | O provider oficial do Aiven cobre serviço, banco e usuários; o `local` grava os arquivos de conexão que o ETL lê |
+| Região | `do-nyc` (DigitalOcean, Nova York) | O Aiven só cria serviços gratuitos na DigitalOcean e na UpCloud, e nenhuma das duas tem região na América do Sul. Tentamos `aws-us-east-1` e a API recusou (`Free plans are available in cloud(s): DigitalOcean,UpCloud`); Nova York é a opção gratuita mais próxima de Salvador |
+| Infraestrutura como código | Terraform 1.7+ com os providers `aiven/aiven` (~> 4.65), `hashicorp/random` (~> 3.7) e `hashicorp/local` (~> 2.5) | O provider oficial do Aiven cobre serviço, banco e usuários; o `random` gera a senha do usuário de leitura; o `local` grava os arquivos de conexão que o ETL lê |
 | Tratamento e carga | Python 3.14, pandas, requests e pg8000 | O pg8000 é Python puro: o psycopg teve a DLL bloqueada pelo Controle de Aplicativos do Windows em uma das máquinas da equipe |
 | Integração contínua | GitHub Actions | Roda os testes, valida o Terraform e procura segredos em cada push e pull request |
 
@@ -294,8 +294,11 @@ Todos em `infra/terraform/`:
 | `data.aiven_project` | `projeto` | Lê o projeto que já vem com a conta e o certificado da CA |
 | `aiven_pg` | `banco` | Serviço PostgreSQL 17 com filtro de IP e tags `projeto` e `etapa` |
 | `aiven_pg_database` | `fomento` | Banco `fomento_cnpq`, separado do `defaultdb` |
-| `aiven_pg_user` | `leitura` | Usuário `analise_leitura`, com senha gerada pelo Aiven, para as próximas fases |
+| `random_password` | `leitura` | Senha de 24 caracteres para o usuário de leitura |
+| `aiven_pg_user` | `leitura` | Usuário `analise_leitura`, para as próximas fases |
 | `local_sensitive_file` | `env`, `ca` | `.env` (permissão 0600) e `ca.pem` na raiz do repositório |
+
+O banco usado na entrega foi criado com esse código, na conta de um integrante: serviço `pg-fomento-cnpq`, plano `free-1-1gb`, região `do-nyc`, PostgreSQL 17. Depois do `apply`, um novo `terraform plan` não mostra nenhuma mudança pendente.
 
 O `cloud_name` está em `ignore_changes` porque o Aiven pode trocar a região de serviços gratuitos. Sem isso, o próximo `terraform plan` tentaria migrar o banco de volta.
 
@@ -309,10 +312,12 @@ A única variável obrigatória é `projeto_aiven`; as demais têm padrão (ver 
 |---|---|---|---|
 | Token da API do Aiven | Cada integrante, no console do Aiven (perfil do usuário, Tokens) | Só na variável de ambiente `AIVEN_TOKEN` do terminal | Não |
 | Senha do `avnadmin` (usada na carga) | Aiven, ao criar o serviço | `terraform.tfstate` e `.env` locais | Não |
-| Senha do `analise_leitura` | Aiven, a pedido do Terraform | `terraform.tfstate` e `.env` locais | Não |
+| Senha do `analise_leitura` | Terraform (`random_password`) | `terraform.tfstate` e `.env` locais | Não |
 | Certificado da CA (`ca.pem`) | Aiven | Raiz do repositório, gerado pelo Terraform | Não |
 
-Ninguém digita nem escolhe senha de banco. O Terraform recebe a senha do Aiven e escreve direto no `.env`, que o `carregar.py` lê. A senha não passa por chat, e-mail ou código.
+Ninguém digita nem escolhe senha de banco. A do `avnadmin` vem do Aiven e a do usuário de leitura é sorteada pelo Terraform; as duas vão direto para o `.env`, que o `carregar.py` lê. A senha não passa por chat, e-mail ou código.
+
+A senha de leitura começou sendo gerada pelo Aiven, mas a API passou a devolver o texto `<redacted>` no lugar da senha de usuários comuns, e o provider gravava isso no state. O `.env` saía com a senha errada e a conexão falhava. Por isso a senha passou a ser gerada pelo `random_password`.
 
 ### 6.2 Medidas adotadas
 
@@ -329,7 +334,7 @@ Ninguém digita nem escolhe senha de banco. O Terraform recebe a senha do Aiven 
 ### 6.3 Se uma credencial vazar
 
 1. Token do Aiven: revogar no console e gerar outro.
-2. Senha do `analise_leitura`: `terraform apply -replace=aiven_pg_user.leitura` recria o usuário com senha nova e reescreve o `.env`. Depois, rodar `carregar.py` de novo para refazer as permissões.
+2. Senha do `analise_leitura`: `terraform apply -replace=random_password.leitura` sorteia uma senha nova, atualiza o usuário no Aiven e reescreve o `.env`.
 3. Senha do `avnadmin`: redefinir na aba Users do serviço, no console, e rodar `terraform apply`, que lê a senha nova e reescreve o `.env`.
 4. Se o segredo chegou a ser commitado, apagar o commit não resolve: a credencial precisa ser trocada.
 
