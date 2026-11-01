@@ -36,9 +36,17 @@ resource "aiven_pg_database" "fomento" {
   database_name = var.nome_banco
 }
 
-# A senha é gerada pelo Aiven e fica só no state e no .env local.
+# Senha do usuário de leitura gerada pelo próprio Terraform. Fica só no state e no .env local.
+# Não usamos a senha gerada pelo Aiven porque a API passou a devolver "<redacted>" no lugar dela
+# para usuários comuns, e o provider gravava esse texto no state (a conexão falhava).
+resource "random_password" "leitura" {
+  length  = 24
+  special = false
+}
+
 resource "aiven_pg_user" "leitura" {
   project      = aiven_pg.banco.project
   service_name = aiven_pg.banco.service_name
   username     = var.usuario_leitura
+  password     = random_password.leitura.result
 }
