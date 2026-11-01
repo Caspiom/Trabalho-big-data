@@ -352,7 +352,7 @@ Os comandos estão no formato Linux/macOS. No Windows, troque `.venv/bin/python`
 **1. Clonar e colocar a base original na pasta acima do projeto**
 
 ```bash
-git clone https://github.com/WalterQueirozRocha/Trabalho-big-data.git
+git clone https://github.com/Caspiom/Trabalho-big-data.git
 # Base_CNPq_Demanda_Atendimento_2019_2024.csv fica ao lado da pasta Trabalho-big-data
 sha256sum Base_CNPq_Demanda_Atendimento_2019_2024.csv   # deve bater com o da seção 2.2
 cd Trabalho-big-data
