@@ -10,9 +10,9 @@ variable "nome_servico" {
 }
 
 variable "nuvem" {
-  description = "Nuvem e região do serviço. O plano gratuito não existe na América do Sul; aws-us-east-1 é a opção gratuita mais próxima."
+  description = "Nuvem e região do serviço. O Aiven só cria serviços gratuitos na DigitalOcean e na UpCloud, nenhuma na América do Sul; do-nyc (Nova York) é a mais próxima."
   type        = string
-  default     = "aws-us-east-1"
+  default     = "do-nyc"
 }
 
 variable "plano" {
