@@ -54,7 +54,7 @@ flowchart LR
 │   ├── terraform.tfvars.example
 │   └── tests/                testes do Terraform com providers simulados
 ├── tests/                    testes do ETL e do banco
-├── docs/relatorio_etapa2.pdf relatório da etapa 2 (formato ABNT)
+├── docs/AI_04_Fase_3_do_projeto.pdf  relatório da entrega (ABNT)
 ├── .github/workflows/        CI: testes, validação do Terraform e busca de segredos
 ├── .env.example              modelo do arquivo de credenciais, sem valores
 ├── .gitleaksignore           exceção justificada da busca de segredos
