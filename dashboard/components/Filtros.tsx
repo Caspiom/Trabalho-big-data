@@ -32,8 +32,11 @@ export function Filtros({ filtros, areas, linhas, modalidades, regioes }: Props)
 
   function navegar(chave: keyof F | null, valor = "") {
     const params = new URLSearchParams();
-    for (const [k, v] of Object.entries(filtros)) if (v !== undefined && k !== chave) params.set(k, String(v));
-    if (chave && valor) params.set(chave, valor);
+    // chave nula = limpar tudo; sem esse teste, o laço devolveria todos os filtros e o botão não faria nada.
+    if (chave) {
+      for (const [k, v] of Object.entries(filtros)) if (v !== undefined && k !== chave) params.set(k, String(v));
+      if (valor) params.set(chave, valor);
+    }
     const busca = params.toString();
     iniciar(() => router.push(busca ? `${caminho}?${busca}` : caminho, { scroll: false }));
   }
