@@ -20,6 +20,24 @@ jobs:
       # Os testes de banco e o de comparação com o CSV original são pulados aqui (sem .env e sem a base de 100 MB).
       - run: python -m unittest discover -s tests -v
 
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      # A página é dinâmica: o build não consulta o banco e não precisa de credenciais.
+      - run: npm run build
+
   terraform:
     runs-on: ubuntu-latest
     defaults:
