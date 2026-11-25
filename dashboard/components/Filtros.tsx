@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import type { Opcao } from "@/lib/consultas";
 import { ANOS, RACAS, SEXOS, type Filtros as F } from "@/lib/filtros";
@@ -11,13 +11,15 @@ type Props = {
   linhas: Opcao[];
   modalidades: Opcao[];
   regioes: Opcao[];
+  desativado?: keyof F; // dimensão que está sendo comparada: não faz sentido filtrá-la
 };
 
 const lista = (valores: (string | number)[]) => valores.map((v) => ({ id: v, nome: String(v) }));
 
-export function Filtros({ filtros, areas, linhas, modalidades, regioes }: Props) {
+export function Filtros({ filtros, areas, linhas, modalidades, regioes, desativado }: Props) {
   const router = useRouter();
   const caminho = usePathname();
+  const atual = useSearchParams();
   const [atualizando, iniciar] = useTransition();
 
   const campos: { chave: keyof F; rotulo: string; opcoes: { id: string | number; nome: string }[] }[] = [
@@ -30,18 +32,22 @@ export function Filtros({ filtros, areas, linhas, modalidades, regioes }: Props)
     { chave: "regiao", rotulo: "Região", opcoes: regioes },
   ];
 
+  const CHAVES = campos.map((c) => c.chave);
+
+  // Parte da busca atual para preservar parâmetros que não são filtros (ex.: a comparação). chave nula = limpar os filtros.
   function navegar(chave: keyof F | null, valor = "") {
-    const params = new URLSearchParams();
-    // chave nula = limpar tudo; sem esse teste, o laço devolveria todos os filtros e o botão não faria nada.
+    const params = new URLSearchParams(atual.toString());
     if (chave) {
-      for (const [k, v] of Object.entries(filtros)) if (v !== undefined && k !== chave) params.set(k, String(v));
+      params.delete(chave);
       if (valor) params.set(chave, valor);
+    } else {
+      for (const k of CHAVES) params.delete(k);
     }
     const busca = params.toString();
     iniciar(() => router.push(busca ? `${caminho}?${busca}` : caminho, { scroll: false }));
   }
 
-  const ativos = Object.values(filtros).filter((v) => v !== undefined).length;
+  const ativos = Object.entries(filtros).filter(([k, v]) => v !== undefined && k !== desativado).length;
 
   return (
     <section aria-label="Filtros" className="space-y-4">
@@ -55,8 +61,10 @@ export function Filtros({ filtros, areas, linhas, modalidades, regioes }: Props)
         {campos.map(({ chave, rotulo, opcoes }) => (
           <label key={chave} className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted">
             {rotulo}
+            {chave === desativado && <span className="font-normal"> · em comparação</span>}
             <select
-              className={`h-11 w-full min-w-0 truncate rounded border bg-surface px-2.5 text-sm font-normal text-ink lg:h-10 ${
+              disabled={chave === desativado}
+              className={`h-11 w-full min-w-0 truncate rounded border bg-surface px-2.5 text-sm font-normal text-ink disabled:opacity-50 lg:h-10 ${
                 filtros[chave] !== undefined ? "border-ink" : "border-line-strong"
               }`}
               value={filtros[chave] ?? ""}

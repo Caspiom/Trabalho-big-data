@@ -1,3 +1,5 @@
+import type { PendingQuery, Row } from "postgres";
+import type { Celula, Comparacao, Dimensao } from "./comparar";
 import { banco } from "./db";
 import type { Filtros } from "./filtros";
 
@@ -6,9 +8,10 @@ export type Grupo = { sexo: string; raca_cor: string; demandadas: number; atendi
 export type Diferenca = { area: string; sexo: string; raca_cor: string; demandadas: number; taxa: number; diferenca: number | null };
 export type Evolucao = { ano: number; grupo: string; taxa: number };
 
-function onde(f: Filtros) {
+function onde(f: Filtros, extra?: PendingQuery<Row[]>) {
   const sql = banco();
   const condicoes = sql`and`.join([
+    extra,
     f.ano && sql`ano_chamada = ${f.ano}`,
     f.sexo && sql`sexo = ${f.sexo}`,
     f.raca && sql`raca_cor = ${f.raca}`,
@@ -77,4 +80,36 @@ export async function evolucao(f: Filtros) {
     where sexo in ('Feminino', 'Masculino') and raca_cor in ('Branca', 'Preta', 'Parda')
     group by ano_chamada, grupo
     order by ano_chamada`;
+}
+
+// Nome da coluna de cada dimensão na subconsulta de comparar(). Lista fechada: nada vindo da URL vira identificador SQL.
+const COLUNA: Record<Dimensao, string> = {
+  ano: "ano",
+  sexo: "sexo",
+  raca: "raca_cor",
+  area: "area",
+  linha: "linha",
+  modalidade: "modalidade",
+  regiao: "regiao",
+};
+
+// Comparação: taxa de cada grupo (valores de uma dimensão), opcionalmente detalhada por outra dimensão.
+// Os filtros valem para todos os grupos, menos o filtro da própria dimensão comparada (senão só sobraria um grupo).
+export async function comparar(f: Filtros, c: Comparacao) {
+  const sql = banco();
+  const grupo = sql(COLUNA[c.dim]);
+  const categoria = c.por ? sql`${sql(COLUNA[c.por])}::text` : sql`null::text`;
+  return sql<Celula[]>`
+    select ${grupo}::text as grupo, ${categoria} as categoria,
+           sum(qtd_demandada)::int as demandadas, sum(qtd_atendida)::int as atendidas
+    from (
+      select f.*, f.ano_chamada as ano, a.nome as area, l.nome as linha, m.nome as modalidade, r.nome as regiao
+      from fato_atendimento_grupo f
+      join dim_grande_area a on a.id = f.grande_area_id
+      join dim_linha_fomento l on l.id = f.linha_fomento_id
+      join dim_modalidade m on m.id = f.modalidade_id
+      join dim_regiao r on r.id = f.regiao_id
+    ) x
+    ${onde({ ...f, [c.dim]: undefined }, sql`${grupo}::text in ${sql(c.valores)}`)}
+    group by 1, 2`;
 }

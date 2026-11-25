@@ -1,55 +1,31 @@
 import { Suspense } from "react";
+import { Cabecalho } from "@/components/Cabecalho";
+import { Esqueleto } from "@/components/Esqueleto";
 import { Filtros } from "@/components/Filtros";
 import { Barras, Linhas, type Linha } from "@/components/Graficos";
+import { Indicador } from "@/components/Indicador";
 import { diferencaPorArea, evolucao, opcoes, porGrupo, type Diferenca, type Grupo } from "@/lib/consultas";
+import { N_MINIMO } from "@/lib/comparar";
 import { lerFiltros, RACAS } from "@/lib/filtros";
 import { inteiro, pct, pp } from "@/lib/formato";
 
 const RACAS_DECLARADAS = RACAS.filter((r) => r !== "Não informado");
 const GRUPOS_SERIE = ["Mulheres negras", "Mulheres brancas", "Homens negros", "Homens brancos"];
-const N_MINIMO = 30;
 
 export default function Page(props: PageProps<"/">) {
   return (
     <main>
-      <header className="border-b border-line">
-        <div className="mx-auto max-w-7xl px-4 pb-8 pt-10 sm:px-8 sm:pt-14">
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
-            Auditoria de viés · CNPq 2019–2024 · ODS 5 e ODS 18
-          </p>
-          <h1 className="mt-3 max-w-3xl text-balance font-display text-4xl leading-[1.05] sm:text-5xl">
-            Fomento do CNPq por gênero e raça/cor
-          </h1>
-          <p className="mt-4 max-w-2xl text-pretty text-muted">
-            Auditoria de viés no atendimento das propostas de bolsas e auxílios, chamadas de 2019 a 2024 (ODS 5 e ODS 18).
-            Dados consultados ao vivo no PostgreSQL do Aiven.
-          </p>
-        </div>
-      </header>
+      <Cabecalho
+        ativo="geral"
+        titulo="Fomento do CNPq por gênero e raça/cor"
+        texto="Auditoria de viés no atendimento das propostas de bolsas e auxílios, chamadas de 2019 a 2024 (ODS 5 e ODS 18). Dados consultados ao vivo no PostgreSQL do Aiven."
+      />
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
         <Suspense fallback={<Esqueleto />}>
           <Painel searchParams={props.searchParams} />
         </Suspense>
       </div>
     </main>
-  );
-}
-
-function Esqueleto() {
-  const bloco = "animate-pulse rounded bg-line";
-  return (
-    <>
-      <div role="status" aria-label="Consultando o banco" className="space-y-3">
-        <div className={`${bloco} h-8`} />
-        {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className={`${bloco} h-14`} />
-        ))}
-      </div>
-      <div className="space-y-6">
-        <div className={`${bloco} h-40`} />
-        <div className={`${bloco} h-80`} />
-      </div>
-    </>
   );
 }
 
@@ -151,21 +127,6 @@ function Resumo({ grupos }: { grupos: Grupo[] }) {
           </div>
         ))}
       </dl>
-    </section>
-  );
-}
-
-function Indicador({ numero, titulo, nota, children }: { numero: number; titulo: string; nota: string; children: React.ReactNode }) {
-  return (
-    <section className="min-w-0 space-y-4">
-      <div className="border-t border-ink pt-3">
-        <h2 className="font-display text-2xl leading-tight">
-          <span className="mr-2 text-muted tabular-nums">{numero}.</span>
-          {titulo}
-        </h2>
-        <p className="mt-1 max-w-3xl text-pretty text-sm text-muted">{nota}</p>
-      </div>
-      {children}
     </section>
   );
 }

@@ -67,7 +67,7 @@ export function Barras({ dados, x, series, horizontal = false }: { dados: Linha[
   );
 }
 
-export function Linhas({ dados, series }: { dados: Linha[]; series: string[] }) {
+export function Linhas({ dados, series, cores }: { dados: Linha[]; series: string[]; cores?: Record<string, string> }) {
   return (
     <ResponsiveContainer width="100%" height={320}>
       <LineChart data={dados}>
@@ -80,10 +80,10 @@ export function Linhas({ dados, series }: { dados: Linha[]; series: string[] }) 
           <Line
             key={s}
             dataKey={s}
-            stroke={COR[s]}
+            stroke={cores?.[s] ?? COR[s]}
             strokeWidth={2.5}
             strokeDasharray={TRACO[s]}
-            dot={{ r: 3, fill: COR[s], strokeWidth: 0 }}
+            dot={{ r: 3, fill: cores?.[s] ?? COR[s], strokeWidth: 0 }}
             connectNulls
             isAnimationActive={false}
           />

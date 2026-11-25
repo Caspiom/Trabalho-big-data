@@ -15,6 +15,10 @@
   --atendimento: #1c1b18;
   --abaixo: 178 69 42;
   --acima: 43 76 115;
+  --cmp-1: #1f7a62;
+  --cmp-2: #a8741a;
+  --cmp-3: #7a4a8f;
+  --cmp-4: #5f6b73;
   --calor-max: 0.6; /* opacidade máxima da célula do mapa de calor */
   color-scheme: light;
 }
@@ -33,6 +37,10 @@
     --atendimento: #ece8dc;
     --abaixo: 229 138 110;
     --acima: 134 169 214;
+    --cmp-1: #4fc2a0;
+    --cmp-2: #e0a84a;
+    --cmp-3: #b88bd0;
+    --cmp-4: #9aa8b0;
     --calor-max: 0.38;
     color-scheme: dark;
   }
