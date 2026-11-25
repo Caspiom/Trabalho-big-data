@@ -4,6 +4,9 @@ locals {
 
   url_carga   = "postgres://${aiven_pg.banco.service_username}:${urlencode(aiven_pg.banco.service_password)}@${local.destino}"
   url_leitura = "postgres://${aiven_pg_user.leitura.username}:${urlencode(aiven_pg_user.leitura.password)}@${local.destino}"
+
+  # O dashboard recebe o certificado na variável PG_CA, então a URL vai sem os parâmetros de SSL.
+  url_leitura_dashboard = "postgres://${aiven_pg_user.leitura.username}:${urlencode(aiven_pg_user.leitura.password)}@${aiven_pg.banco.service_host}:${aiven_pg.banco.service_port}/${aiven_pg_database.fomento.database_name}"
 }
 
 # Mesmo formato do .env.example. O ETL lê esse arquivo direto.
@@ -25,4 +28,13 @@ resource "local_sensitive_file" "ca" {
   filename        = "${path.root}/../../ca.pem"
   file_permission = "0644"
   content         = data.aiven_project.projeto.ca_cert
+}
+
+# Mesmas variáveis que a Vercel recebe, para rodar o dashboard localmente (npm run dev).
+resource "local_sensitive_file" "env_dashboard" {
+  count           = var.gerar_arquivos_locais ? 1 : 0
+  filename        = "${path.root}/../../dashboard/.env.local"
+  file_permission = "0600"
+  # Sem heredoc: as linhas do certificado não têm recuo, e o <<- deixaria o recuo nas demais.
+  content = "DATABASE_URL=${local.url_leitura_dashboard}\nPG_CA=\"${trimspace(data.aiven_project.projeto.ca_cert)}\"\n"
 }

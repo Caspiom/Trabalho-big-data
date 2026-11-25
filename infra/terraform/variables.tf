@@ -51,7 +51,25 @@ variable "ips_liberados" {
 }
 
 variable "gerar_arquivos_locais" {
-  description = "Gera o .env e o ca.pem na raiz do repositório para o ETL usar. Os dois arquivos estão no .gitignore."
+  description = "Gera o .env e o ca.pem na raiz do repositório para o ETL usar, e o dashboard/.env.local para rodar o dashboard. Todos estão no .gitignore."
   type        = bool
   default     = true
+}
+
+variable "criar_dashboard" {
+  description = "Cria o projeto do dashboard na Vercel (exige VERCEL_API_TOKEN). Use false para provisionar só o banco."
+  type        = bool
+  default     = true
+}
+
+variable "repositorio_github" {
+  description = "Repositório que a Vercel acompanha. Cada push na branch principal publica o dashboard."
+  type        = string
+  default     = "Caspiom/Trabalho-big-data"
+}
+
+variable "nome_projeto_vercel" {
+  description = "Nome do projeto na Vercel. Define o endereço público <nome>.vercel.app, se estiver livre."
+  type        = string
+  default     = "fomento-cnpq-dashboard"
 }
