@@ -15,10 +15,20 @@
   --atendimento: #174539; /* tom forte: o que foi atendido */
   --abaixo: 178 69 42;
   --acima: 43 76 115;
+  /* Paleta categórica da comparação (13 = maior dimensão, modalidade). Do 5º em diante: ΔE ≥ 29 entre cores e contraste ≥ 3:1. */
   --cmp-1: #1f7a62;
   --cmp-2: #a8741a;
   --cmp-3: #7a4a8f;
   --cmp-4: #5f6b73;
+  --cmp-5: #2e9e2e;
+  --cmp-6: #3939c6;
+  --cmp-7: #c639c6;
+  --cmp-8: #c63971;
+  --cmp-9: #682731;
+  --cmp-10: #5b6f20;
+  --cmp-11: #755a38;
+  --cmp-12: #4170c8;
+  --cmp-13: #3795be;
   --calor-max: 0.6; /* opacidade máxima da célula do mapa de calor */
   color-scheme: light;
 }
@@ -41,6 +51,15 @@
     --cmp-2: #e0a84a;
     --cmp-3: #b88bd0;
     --cmp-4: #9aa8b0;
+    --cmp-5: #39c639;
+    --cmp-6: #8739c6;
+    --cmp-7: #c63971;
+    --cmp-8: #b7d879;
+    --cmp-9: #3963c6;
+    --cmp-10: #d8c197;
+    --cmp-11: #c639aa;
+    --cmp-12: #c63939;
+    --cmp-13: #bd758b;
     --calor-max: 0.38;
     color-scheme: dark;
   }

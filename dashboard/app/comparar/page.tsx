@@ -7,7 +7,7 @@ import { Linhas, type Linha } from "@/components/Graficos";
 import { Halteres } from "@/components/Halteres";
 import { Indicador } from "@/components/Indicador";
 import { TabelaComparacao } from "@/components/TabelaComparacao";
-import { categorias, corDoValor, lerComparacao, N_MINIMO, rotuloDimensao, totais, type Permitidos, type Serie, type Total } from "@/lib/comparar";
+import { categorias, corDoValor, destaque, lerComparacao, N_MINIMO, rotuloDimensao, totais, type Permitidos, type Serie, type Total } from "@/lib/comparar";
 import { comparar, opcoes } from "@/lib/consultas";
 import { ANOS, lerFiltros, RACAS, SEXOS } from "@/lib/filtros";
 import { inteiro, pct, pp } from "@/lib/formato";
@@ -97,28 +97,34 @@ async function Painel({ searchParams }: Pick<PageProps<"/comparar">, "searchPara
 }
 
 function Resumo({ totais, series }: { totais: Total[]; series: Serie[] }) {
-  const [a, b] = totais;
-  const dif = a && b && a.taxa !== null && b.taxa !== null ? a.taxa - b.taxa : null;
+  const d = destaque(totais);
   return (
     <section aria-label="Resumo da comparação" className="grid gap-x-10 gap-y-6 border-y-2 border-ink py-6 md:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-      {b && (
+      {totais.length >= 2 && (
         <div>
-          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
-            {a.grupo} − {b.grupo}
-          </p>
-          {dif !== null ? (
+          {d ? (
             <>
-              <p className="mt-1 font-display text-5xl leading-none tabular-nums">{pp(dif)}</p>
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted">
+                {d.tipo === "par" ? `${d.de.grupo} − ${d.para.grupo}` : `Maior − menor taxa`}
+              </p>
+              <p className="mt-1 font-display text-5xl leading-none tabular-nums">{d.tipo === "par" ? pp(d.diferenca) : pp(d.diferenca).replace("+", "")}</p>
               <p className="mt-3 max-w-md text-pretty text-sm text-muted">
-                Diferença entre as taxas de atendimento, em pontos percentuais, com os filtros atuais.
+                {d.tipo === "par" ? (
+                  "Diferença entre as taxas de atendimento, em pontos percentuais, com os filtros atuais."
+                ) : (
+                  <>
+                    <strong className="font-semibold text-ink">{d.de.grupo}</strong> ({pct(d.de.taxa ?? 0)}) contra{" "}
+                    <strong className="font-semibold text-ink">{d.para.grupo}</strong> ({pct(d.para.taxa ?? 0)}), entre os grupos com ao menos {N_MINIMO} propostas.
+                  </>
+                )}
               </p>
             </>
           ) : (
-            <p className="mt-2 max-w-md text-pretty text-sm text-muted">Indisponível: um dos dois grupos não tem propostas com os filtros atuais.</p>
+            <p className="mt-2 max-w-md text-pretty text-sm text-muted">Indisponível: faltam grupos com propostas com os filtros atuais.</p>
           )}
         </div>
       )}
-      <dl className={`grid grid-cols-2 gap-x-4 gap-y-4 self-end ${b ? "" : "md:col-span-2"}`}>
+      <dl className={`grid grid-cols-2 gap-x-4 gap-y-4 self-end ${totais.length > 4 ? "xl:grid-cols-3" : ""} ${totais.length < 2 ? "md:col-span-2" : ""}`}>
         {totais.map((t, i) => (
           <div key={t.grupo} className="min-w-0 border-l-2 pl-3" style={{ borderColor: series[i].cor }}>
             <dt className="truncate text-xs text-muted">{t.grupo}</dt>

@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
-import { DIMENSOES, MAX_VALORES, rotuloDimensao, type Dimensao, type Permitidos } from "@/lib/comparar";
+import { DIMENSOES, rotuloDimensao, type Dimensao, type Permitidos } from "@/lib/comparar";
 
 type Props = {
   dim: Dimensao;
@@ -41,10 +41,18 @@ export function Comparador({ dim, valores, por, permitidos, cores }: Props) {
   const alternar = (v: string) =>
     ir((p) => {
       const lista = valores.includes(v) ? valores.filter((x) => x !== v) : [...valores, v];
-      if (lista.length === 0 || lista.length > MAX_VALORES) return;
+      if (lista.length === 0) return;
       p.delete("v");
       for (const x of lista) p.append("v", x);
     });
+
+  const marcarTodos = () =>
+    ir((p) => {
+      p.delete("v");
+      for (const x of permitidos[dim]) p.append("v", x);
+    });
+  const restaurar = () => ir((p) => p.delete("v"));
+  const todosMarcados = valores.length === permitidos[dim].length;
 
   return (
     <section aria-label="Escolha da comparação" className="space-y-4">
@@ -76,28 +84,34 @@ export function Comparador({ dim, valores, por, permitidos, cores }: Props) {
         </label>
       </div>
       <fieldset>
-        <legend className="mb-2 flex w-full flex-wrap items-baseline justify-between gap-x-4 text-xs font-medium text-muted">
+        <legend className="mb-2 flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs font-medium text-muted">
           <span>
-            {rotuloDimensao(dim)}: marque de 2 a {MAX_VALORES}
+            {rotuloDimensao(dim)}: {valores.length} de {permitidos[dim].length} marcados
           </span>
           <span aria-live="polite" className="font-normal">
-            {atualizando ? "Consultando…" : "A diferença é entre os dois primeiros que você marcar (1º menos 2º)."}
+            {atualizando ? "Consultando…" : valores.length === 2 ? "A diferença é o 1º menos o 2º." : valores.length > 2 ? "Com 3 ou mais, o destaque é a maior menos a menor taxa." : ""}
           </span>
         </legend>
+        <div className="mb-2 flex gap-4 text-xs">
+          <button type="button" onClick={marcarTodos} disabled={todosMarcados} className="font-medium text-ink underline underline-offset-2 disabled:text-muted disabled:no-underline">
+            Marcar todos
+          </button>
+          <button type="button" onClick={restaurar} className="font-medium text-ink underline underline-offset-2">
+            Restaurar padrão
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           {permitidos[dim].map((v) => {
             const marcado = valores.includes(v);
-            const cheio = !marcado && valores.length >= MAX_VALORES;
             return (
               <button
                 key={v}
                 type="button"
                 aria-pressed={marcado}
-                disabled={cheio}
                 onClick={() => alternar(v)}
                 className={`flex min-h-11 items-center gap-2 rounded border px-3 text-sm lg:min-h-9 ${
                   marcado ? "border-ink bg-surface text-ink" : "border-line-strong text-muted hover:border-ink hover:text-ink"
-                } disabled:opacity-40 disabled:hover:border-line-strong disabled:hover:text-muted`}
+                }`}
               >
                 {marcado && <span aria-hidden className="size-2.5 shrink-0 rounded-full" style={{ background: cores[v] }} />}
                 {v}

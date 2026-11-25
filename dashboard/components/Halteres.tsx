@@ -17,6 +17,7 @@ export function Halteres({ linhas, series }: { linhas: LinhaCategoria[]; series:
   for (let t = Math.ceil(min / passo - 1e-9) * passo; t <= max + 1e-9; t += passo) marcas.push(Math.round(t * 100) / 100);
   const x = (t: number) => `${((t - min) / (max - min)) * 100}%`;
   const dois = series.length === 2;
+  const ponto = series.length > 6 ? "size-2.5" : "size-3.5"; // com muitos grupos os pontos encolhem para se sobreporem menos
 
   return (
     <div>
@@ -65,7 +66,7 @@ export function Halteres({ linhas, series }: { linhas: LinhaCategoria[]; series:
                       <span
                         key={s.valor}
                         title={`${s.valor}: ${pct(p.taxa)} (${inteiro(p.demandadas)} propostas)`}
-                        className="absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-paper"
+                        className={`absolute top-1/2 ${ponto} -translate-x-1/2 -translate-y-1/2 rounded-full border border-paper`}
                         style={{ left: x(p.taxa), background: s.cor, opacity: p.demandadas < N_MINIMO ? 0.4 : 1 }}
                       />
                     );

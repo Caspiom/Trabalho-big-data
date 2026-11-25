@@ -6,7 +6,7 @@ export function TabelaComparacao({ linhas, series, rotuloCategoria }: { linhas: 
   const dois = series.length === 2;
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[520px] border-collapse text-sm">
+      <table className="w-full border-collapse text-sm" style={{ minWidth: 150 + (series.length + 1) * 105 }}>
         <caption className="sr-only">Taxa de atendimento de cada grupo, por {rotuloCategoria.toLowerCase()}</caption>
         <thead>
           <tr className="border-b border-line-strong text-xs text-muted">

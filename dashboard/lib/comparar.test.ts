@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { categorias, corDoValor, lerComparacao, totais, type Celula, type Permitidos } from "./comparar.ts";
+import { categorias, corDoValor, destaque, lerComparacao, PALETA, totais, type Celula, type Permitidos } from "./comparar.ts";
 
 const permitidos: Permitidos = {
   ano: ["2019", "2020", "2021", "2022", "2023", "2024"],
@@ -23,9 +23,11 @@ test("cada dimensão tem um par padrão e um detalhe diferente dela mesma", () =
   assert.deepEqual(lerComparacao({ comparar: "regiao" }, permitidos).valores, ["Nordeste", "Sul"]);
 });
 
-test("aceita até 4 valores, sem repetição, só os permitidos", () => {
-  const c = lerComparacao({ comparar: "ano", v: ["2020", "2020", "2021", "x' OR 1=1 --", "2022", "2023", "2024"] }, permitidos);
-  assert.deepEqual(c.valores, ["2020", "2021", "2022", "2023"]);
+test("aceita todos os valores permitidos, sem repetição e sem aceitar o que não existe", () => {
+  const c = lerComparacao({ comparar: "ano", v: ["2020", "2020", "2021", "x' OR 1=1 --", "2022", "2023", "2024", "2019"] }, permitidos);
+  assert.deepEqual(c.valores, ["2020", "2021", "2022", "2023", "2024", "2019"]);
+  const todas = lerComparacao({ comparar: "raca", v: permitidos.raca }, permitidos);
+  assert.deepEqual(todas.valores, permitidos.raca);
 });
 
 test("dimensão ou detalhe inválidos voltam ao padrão; detalhe nunca repete a dimensão", () => {
@@ -40,11 +42,13 @@ test("valores todos inválidos viram o par padrão", () => {
   assert.deepEqual(lerComparacao({ comparar: "sexo", v: "zzz" }, permitidos).valores, ["Feminino", "Masculino"]);
 });
 
-test("sexo mantém as cores do painel; os demais usam a paleta categórica", () => {
+test("sexo mantém as cores do painel; os demais usam a paleta categórica, que recomeça depois da última cor", () => {
   assert.equal(corDoValor("sexo", "Feminino", 0), "var(--fem)");
   assert.equal(corDoValor("sexo", "Masculino", 1), "var(--masc)");
   assert.equal(corDoValor("sexo", "Não informado", 2), "var(--cmp-3)");
   assert.equal(corDoValor("raca", "Branca", 0), "var(--cmp-1)");
+  assert.equal(corDoValor("raca", "x", PALETA - 1), `var(--cmp-${PALETA})`);
+  assert.equal(corDoValor("raca", "x", PALETA), "var(--cmp-1)");
 });
 
 const celulas: Celula[] = [
@@ -82,13 +86,42 @@ test("toda cor usada na comparação está declarada no globals.css, no tema cla
   const [claro, escuro] = css.split("@media (prefers-color-scheme: dark)");
   const usadas = new Set<string>();
   for (const dim of ["ano", "sexo", "raca", "area", "linha", "modalidade", "regiao"] as const) {
-    for (const [i, v] of ["Feminino", "Masculino", "x", "y", "z"].entries()) usadas.add(corDoValor(dim, v, i));
+    for (let i = 0; i < PALETA; i++) usadas.add(corDoValor(dim, i === 0 ? "Feminino" : i === 1 ? "Masculino" : `v${i}`, i));
   }
-  assert.ok(usadas.size >= 6);
+  assert.ok(usadas.size >= PALETA, `esperava ${PALETA} cores distintas, achei ${usadas.size}`);
   for (const cor of usadas) {
     const nome = /var\((--[\w-]+)\)/.exec(cor)?.[1];
     assert.ok(nome, `cor inesperada: ${cor}`);
     assert.match(claro, new RegExp(`${nome}:`), `${nome} falta no tema claro`);
     assert.match(escuro, new RegExp(`${nome}:`), `${nome} falta no tema escuro`);
   }
+});
+
+const tot = (grupo: string, demandadas: number, atendidas: number) => ({ grupo, demandadas, atendidas, taxa: demandadas ? atendidas / demandadas : null });
+
+test("destaque com 2 grupos é o 1º menos o 2º", () => {
+  const d = destaque([tot("A", 100, 30), tot("B", 100, 40)]);
+  assert.equal(d?.tipo, "par");
+  assert.ok(Math.abs((d?.diferenca ?? 0) + 0.1) < 1e-9);
+});
+
+test("destaque com 3 ou mais é maior menos menor, ignorando a ordem da lista", () => {
+  const d = destaque([tot("A", 100, 30), tot("B", 100, 60), tot("C", 100, 10)]);
+  assert.equal(d?.tipo, "amplitude");
+  assert.deepEqual([d?.de.grupo, d?.para.grupo], ["B", "C"]);
+  assert.ok(Math.abs((d?.diferenca ?? 0) - 0.5) < 1e-9);
+});
+
+test("destaque ignora grupos com menos de 30 propostas, se houver ao menos 2 firmes", () => {
+  const d = destaque([tot("A", 100, 30), tot("B", 100, 40), tot("minúsculo", 2, 2)]);
+  assert.deepEqual([d?.de.grupo, d?.para.grupo], ["B", "A"]);
+  // sem 2 firmes, usa todos em vez de sumir
+  const so = destaque([tot("A", 100, 30), tot("x", 2, 2), tot("y", 3, 0)]);
+  assert.deepEqual([so?.de.grupo, so?.para.grupo], ["x", "y"]);
+});
+
+test("destaque é nulo com 1 grupo ou quando faltam taxas", () => {
+  assert.equal(destaque([tot("A", 100, 30)]), null);
+  assert.equal(destaque([tot("A", 100, 30), tot("B", 0, 0)]), null);
+  assert.equal(destaque([tot("A", 100, 30), tot("B", 0, 0), tot("C", 0, 0)]), null);
 });

@@ -1,7 +1,8 @@
 // Sem imports: este arquivo roda direto no node --test.
 
 export const N_MINIMO = 30;
-export const MAX_VALORES = 4;
+// Sem limite de grupos. A paleta tem 13 cores (a maior dimensão, modalidade, tem 13 valores); passando disso as cores se repetem.
+export const PALETA = 13;
 
 export const DIMENSOES = [
   { chave: "ano", rotulo: "Ano da chamada" },
@@ -20,6 +21,7 @@ export type Celula = { grupo: string; categoria: string | null; demandadas: numb
 export type Serie = { valor: string; cor: string };
 export type Total = { grupo: string; demandadas: number; atendidas: number; taxa: number | null };
 export type Ponto = { taxa: number; demandadas: number };
+export type Destaque = { tipo: "par" | "amplitude"; de: Total; para: Total; diferenca: number };
 export type LinhaCategoria = {
   categoria: string;
   pontos: Record<string, Ponto | undefined>;
@@ -52,7 +54,7 @@ function valoresPadrao(dim: Dimensao, permitidos: Permitidos) {
 export function lerComparacao(p: Parametros, permitidos: Permitidos): Comparacao {
   const chaves = DIMENSOES.map((d) => d.chave) as Dimensao[];
   const dim = chaves.find((c) => c === primeiro(p.comparar)) ?? "sexo";
-  const escolhidos = [...new Set(lista(p.v))].filter((v) => permitidos[dim].includes(v)).slice(0, MAX_VALORES);
+  const escolhidos = [...new Set(lista(p.v))].filter((v) => permitidos[dim].includes(v));
   const valores = escolhidos.length ? escolhidos : valoresPadrao(dim, permitidos);
   const bruto = primeiro(p.por);
   const por = bruto === "nenhum" ? null : (chaves.find((c) => c === bruto && c !== dim) ?? porPadrao(dim));
@@ -63,7 +65,7 @@ export function lerComparacao(p: Parametros, permitidos: Permitidos): Comparacao
 export function corDoValor(dim: Dimensao, valor: string, indice: number) {
   if (dim === "sexo" && valor === "Feminino") return "var(--fem)";
   if (dim === "sexo" && valor === "Masculino") return "var(--masc)";
-  return `var(--cmp-${(indice % MAX_VALORES) + 1})`;
+  return `var(--cmp-${(indice % PALETA) + 1})`;
 }
 
 export const taxa = (atendidas: number, demandadas: number) => (demandadas > 0 ? atendidas / demandadas : null);
@@ -98,4 +100,22 @@ export function categorias(celulas: Celula[], valores: string[], ordem: "natural
   });
   const nome = (a: LinhaCategoria, b: LinhaCategoria) => a.categoria.localeCompare(b.categoria, "pt-BR", { numeric: true });
   return linhas.sort(ordem === "natural" ? nome : (a, b) => (b.amplitude ?? -1) - (a.amplitude ?? -1) || nome(a, b));
+}
+
+// Número de destaque do topo. Com 2 grupos: 1º menos 2º. Com 3 ou mais, a ordem da lista é arbitrária, então vale a
+// distância entre a maior e a menor taxa, só entre grupos com propostas suficientes (senão um grupo minúsculo decide).
+export function destaque(totais: Total[]): Destaque | null {
+  const comTaxa = totais.filter((t): t is Total & { taxa: number } => t.taxa !== null);
+  if (totais.length === 2) {
+    const [a, b] = totais;
+    return a.taxa !== null && b.taxa !== null ? { tipo: "par", de: a, para: b, diferenca: a.taxa - b.taxa } : null;
+  }
+  if (totais.length < 3) return null;
+  const firmes = comTaxa.filter((t) => t.demandadas >= N_MINIMO);
+  const base = firmes.length >= 2 ? firmes : comTaxa;
+  if (base.length < 2) return null;
+  const ordenado = [...base].sort((x, y) => y.taxa - x.taxa);
+  const de = ordenado[0];
+  const para = ordenado[ordenado.length - 1];
+  return { tipo: "amplitude", de, para, diferenca: de.taxa - para.taxa };
 }
