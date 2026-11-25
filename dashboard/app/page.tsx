@@ -60,7 +60,7 @@ async function Painel({ searchParams }: Pick<PageProps<"/">, "searchParams">) {
             <Indicador
               numero={2}
               titulo="Diferença de taxa para os homens brancos, por grande área"
-              nota={`Pontos percentuais em relação aos homens brancos (o maior grupo) na mesma área. Células apagadas têm menos de ${N_MINIMO} propostas e são instáveis.`}
+              nota={`Pontos percentuais em relação aos homens brancos (o maior grupo) na mesma área. Células com borda tracejada e itálico têm menos de ${N_MINIMO} propostas e são instáveis: a cor mostra o tamanho da diferença, não a confiança nela.`}
             >
               <TabelaDiferencas linhas={diferencas} />
             </Indicador>
@@ -154,7 +154,7 @@ function TabelaDiferencas({ linhas }: { linhas: Diferenca[] }) {
           acima
         </li>
         <li className="flex items-center gap-1.5">
-          <span aria-hidden className="size-3 rounded-sm border border-line-strong opacity-40" style={{ background: fundo("abaixo", 0.8) }} />
+          <span aria-hidden className="instavel size-3 rounded-sm border border-line-strong [--inset:1px]" style={{ backgroundColor: fundo("abaixo", 0.8) }} />
           menos de {N_MINIMO} propostas
         </li>
       </ul>
@@ -190,17 +190,18 @@ function TabelaDiferencas({ linhas }: { linhas: Diferenca[] }) {
                       </td>
                     );
                   const intensidade = Math.min(Math.abs(c.diferenca) / 0.15, 1);
+                  // A cor mostra só a magnitude. Poucas propostas = borda tracejada + itálico, não transparência
+                  // (apagar a célula fazia os maiores valores, que vêm de grupos pequenos, parecerem os menores).
+                  const instavel = c.demandadas < N_MINIMO;
                   return (
                     <td
                       key={sexo + raca}
-                      title={`${inteiro(c.demandadas)} propostas, taxa ${pct(c.taxa)}`}
-                      className="px-2 py-2 text-right tabular-nums"
-                      style={{
-                        backgroundColor: fundo(c.diferenca < 0 ? "abaixo" : "acima", intensidade),
-                        opacity: c.demandadas < N_MINIMO ? 0.4 : 1,
-                      }}
+                      title={`${inteiro(c.demandadas)} propostas, taxa ${pct(c.taxa)}${instavel ? " (instável)" : ""}`}
+                      className={`px-2 py-2 text-right tabular-nums ${instavel ? "instavel" : ""}`}
+                      style={{ backgroundColor: fundo(c.diferenca < 0 ? "abaixo" : "acima", intensidade) }}
                     >
                       {pp(c.diferenca)}
+                      {instavel && <span className="sr-only"> (menos de {N_MINIMO} propostas)</span>}
                     </td>
                   );
                 })}

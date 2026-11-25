@@ -76,3 +76,11 @@ body {
     transition: none !important;
   }
 }
+
+/* Célula com poucas propostas: borda tracejada interna + itálico. A cor de fundo continua mostrando só a magnitude.
+   A borda fica na margem da célula, nunca sob o texto, então não reduz o contraste. */
+.instavel {
+  outline: 1.5px dashed color-mix(in srgb, var(--ink) 60%, transparent);
+  outline-offset: calc(var(--inset, 3px) * -1);
+  font-style: italic;
+}
