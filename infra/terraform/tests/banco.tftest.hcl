@@ -20,6 +20,8 @@ mock_provider "aiven" {
 
 mock_provider "local" {}
 
+mock_provider "vercel" {}
+
 variables {
   projeto_aiven = "projeto-teste"
 }
@@ -75,8 +77,45 @@ run "sem_arquivos_locais_quando_desligado" {
   }
 
   assert {
-    condition     = length(local_sensitive_file.env) == 0 && length(local_sensitive_file.ca) == 0
+    condition     = length(local_sensitive_file.env) == 0 && length(local_sensitive_file.ca) == 0 && length(local_sensitive_file.env_dashboard) == 0
     error_message = "Nenhum arquivo local deveria ser gerado."
+  }
+}
+
+run "dashboard_na_vercel_com_usuario_de_leitura" {
+  command = apply
+
+  assert {
+    condition     = vercel_project.dashboard[0].root_directory == "dashboard" && contains(vercel_project.dashboard[0].resource_config.function_default_regions, "iad1")
+    error_message = "O projeto deve publicar a pasta dashboard/ perto do banco (iad1)."
+  }
+
+  assert {
+    condition     = vercel_project_environment_variable.database_url[0].sensitive && vercel_project_environment_variable.pg_ca[0].sensitive
+    error_message = "As variáveis do banco devem ser sensíveis na Vercel."
+  }
+
+  assert {
+    condition     = startswith(vercel_project_environment_variable.database_url[0].value, "postgres://analise_leitura:") && !strcontains(vercel_project_environment_variable.database_url[0].value, "sslrootcert")
+    error_message = "O dashboard deve usar o usuário de leitura, com o certificado fora da URL."
+  }
+
+  assert {
+    condition     = startswith(local_sensitive_file.env_dashboard[0].content, "DATABASE_URL=postgres://analise_leitura:") && strcontains(local_sensitive_file.env_dashboard[0].content, "PG_CA=\"-----BEGIN CERTIFICATE-----")
+    error_message = "O dashboard/.env.local deve ter a URL de leitura e o certificado."
+  }
+}
+
+run "sem_dashboard_quando_desligado" {
+  command = plan
+
+  variables {
+    criar_dashboard = false
+  }
+
+  assert {
+    condition     = length(vercel_project.dashboard) == 0 && length(vercel_project_environment_variable.database_url) == 0
+    error_message = "Nenhum recurso da Vercel deveria ser criado."
   }
 }
 
