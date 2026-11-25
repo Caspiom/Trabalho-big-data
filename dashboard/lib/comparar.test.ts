@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { categorias, corDoValor, lerComparacao, totais, type Celula, type Permitidos } from "./comparar.ts";
 
@@ -73,4 +74,21 @@ test("categorias: diferença do 1º menos o 2º, amplitude, ordem por amplitude"
 test("ordem natural põe os anos em sequência", () => {
   const anos: Celula[] = ["2021", "2019", "2020"].map((categoria) => ({ grupo: "Feminino", categoria, demandadas: 10, atendidas: 5 }));
   assert.deepEqual(categorias(anos, ["Feminino"], "natural").map((x) => x.categoria), ["2019", "2020", "2021"]);
+});
+
+// Variável CSS inexistente não dá erro: o gráfico só perde a cor (linha sem traço, ponto preto). Este teste pega isso.
+test("toda cor usada na comparação está declarada no globals.css, no tema claro e no escuro", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  const [claro, escuro] = css.split("@media (prefers-color-scheme: dark)");
+  const usadas = new Set<string>();
+  for (const dim of ["ano", "sexo", "raca", "area", "linha", "modalidade", "regiao"] as const) {
+    for (const [i, v] of ["Feminino", "Masculino", "x", "y", "z"].entries()) usadas.add(corDoValor(dim, v, i));
+  }
+  assert.ok(usadas.size >= 6);
+  for (const cor of usadas) {
+    const nome = /var\((--[\w-]+)\)/.exec(cor)?.[1];
+    assert.ok(nome, `cor inesperada: ${cor}`);
+    assert.match(claro, new RegExp(`${nome}:`), `${nome} falta no tema claro`);
+    assert.match(escuro, new RegExp(`${nome}:`), `${nome} falta no tema escuro`);
+  }
 });
