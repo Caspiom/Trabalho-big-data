@@ -1,25 +1,70 @@
 @import "tailwindcss";
 
+/* Papel quente + tinta. Cor só onde há significado:
+   ferrugem = feminino / abaixo da referência; azul-marinho = masculino / acima. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  color-scheme: light dark;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --paper: #f5f2ea;
+  --surface: #fffdf8;
+  --ink: #1c1b18;
+  --muted: #5c574c;
+  --line: #ddd6c6;
+  --line-strong: #a79f8b;
+  --fem: #b2452a;
+  --masc: #2b4c73;
+  --demanda: #b8b09f;
+  --atendimento: #1c1b18;
+  --abaixo: 178 69 42;
+  --acima: 43 76 115;
+  --calor-max: 0.6; /* opacidade máxima da célula do mapa de calor */
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #15140f;
+    --surface: #1d1c16;
+    --ink: #ece8dc;
+    --muted: #a8a191;
+    --line: #34312a;
+    --line-strong: #5a564a;
+    --fem: #e58a6e;
+    --masc: #86a9d6;
+    --demanda: #5f5a4d;
+    --atendimento: #ece8dc;
+    --abaixo: 229 138 110;
+    --acima: 134 169 214;
+    --calor-max: 0.38;
+    color-scheme: dark;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fem: var(--fem);
+  --color-masc: var(--masc);
+  --font-sans: var(--font-plex), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-newsreader), Georgia, serif;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: system-ui, Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--masc);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
 }

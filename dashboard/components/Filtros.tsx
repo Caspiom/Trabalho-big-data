@@ -41,16 +41,24 @@ export function Filtros({ filtros, areas, linhas, modalidades, regioes }: Props)
     iniciar(() => router.push(busca ? `${caminho}?${busca}` : caminho, { scroll: false }));
   }
 
-  const algumFiltro = Object.values(filtros).some((v) => v !== undefined);
+  const ativos = Object.values(filtros).filter((v) => v !== undefined).length;
 
   return (
-    <section aria-label="Filtros" className="rounded-lg border border-black/10 p-4 dark:border-white/15">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <section aria-label="Filtros" className="space-y-4">
+      <div className="flex items-baseline justify-between border-b border-ink pb-2">
+        <h2 className="font-display text-xl">Filtros</h2>
+        <span aria-live="polite" className="text-xs text-muted">
+          {atualizando ? "Consultando…" : ativos ? `${ativos} ativo${ativos > 1 ? "s" : ""}` : ""}
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-1">
         {campos.map(({ chave, rotulo, opcoes }) => (
-          <label key={chave} className="flex flex-col gap-1 text-sm">
-            <span className="font-medium">{rotulo}</span>
+          <label key={chave} className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted">
+            {rotulo}
             <select
-              className="rounded border border-black/20 bg-transparent px-2 py-1.5 dark:border-white/25"
+              className={`h-11 w-full min-w-0 truncate rounded border bg-surface px-2.5 text-sm font-normal text-ink lg:h-10 ${
+                filtros[chave] !== undefined ? "border-ink" : "border-line-strong"
+              }`}
               value={filtros[chave] ?? ""}
               onChange={(e) => navegar(chave, e.target.value)}
             >
@@ -63,20 +71,15 @@ export function Filtros({ filtros, areas, linhas, modalidades, regioes }: Props)
             </select>
           </label>
         ))}
-        <div className="flex items-end gap-3 text-sm">
-          <button
-            type="button"
-            disabled={!algumFiltro}
-            onClick={() => navegar(null)}
-            className="rounded border border-black/20 px-3 py-1.5 disabled:opacity-40 dark:border-white/25"
-          >
-            Limpar filtros
-          </button>
-          <span aria-live="polite" className="opacity-70">
-            {atualizando ? "Consultando…" : ""}
-          </span>
-        </div>
       </div>
+      <button
+        type="button"
+        disabled={ativos === 0}
+        onClick={() => navegar(null)}
+        className="h-11 w-full rounded border border-line-strong text-sm text-ink hover:border-ink disabled:opacity-40 disabled:hover:border-line-strong lg:h-10"
+      >
+        Limpar filtros
+      </button>
     </section>
   );
 }
