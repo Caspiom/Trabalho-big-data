@@ -1,6 +1,8 @@
-# Fase 2 – Tratamento e Armazenamento dos Dados
+# Fase 3 – Dashboard e Entrega Final
 
 Auditoria de viés étnico-racial e de gênero no fomento do CNPq. Trabalho da disciplina Big Data e Analytics (Engenharia de Software, UCSal, 2026).
+
+**Dashboard publicado:** https://fomento-cnpq-dashboard.vercel.app (consulta o banco do Aiven a cada acesso). Para rodar localmente, ver [10.4](#104-como-publicar-e-rodar).
 
 Equipe:
 
@@ -8,7 +10,7 @@ Equipe:
 2. Walter Queiroz Rocha
 3. Guilherme Ferreira Sampaio
 
-Nesta fase os dados do Painel de Demanda e Atendimento do CNPq são tratados, organizados em um modelo dimensional e carregados em um PostgreSQL na nuvem (Aiven), com a infraestrutura descrita em Terraform.
+Na Fase 2 os dados do Painel de Demanda e Atendimento do CNPq foram tratados, organizados em um modelo dimensional e carregados em um PostgreSQL na nuvem (Aiven), com a infraestrutura descrita em Terraform. Na Fase 3 um dashboard em Next.js, publicado na Vercel, consulta esse banco em tempo real e mostra quatro indicadores interseccionais com filtros.
 
 ```mermaid
 flowchart LR
@@ -18,6 +20,9 @@ flowchart LR
     P --> C[etl/carregar.py]
     I[infra/terraform] -->|cria o serviço e gera .env e ca.pem| C
     C --> D[(PostgreSQL no Aiven)]
+    I -->|cria o projeto e as variáveis| V[dashboard/<br/>Next.js na Vercel]
+    D -->|usuário só de leitura, TLS| V
+    V --> N[Navegador]
 ```
 
 ## Sumário
@@ -31,7 +36,9 @@ flowchart LR
 7. [Execução](#7-execução)
 8. [Testes](#8-testes)
 9. [Limitações](#9-limitações)
-10. [Referências](#10-referências)
+10. [Dashboard](#10-dashboard)
+11. [Análise crítica: ODS 5 e ODS 18](#11-análise-crítica-ods-5-e-ods-18)
+12. [Referências](#12-referências)
 
 ## 1. Estrutura do repositório
 
@@ -41,6 +48,12 @@ flowchart LR
 │   ├── extrair_painel.py     extrai do painel os totais por sexo e raça/cor
 │   ├── tratar.py             limpa, padroniza, unifica e agrega as duas fontes
 │   └── carregar.py           cria o esquema e carrega os CSVs tratados no PostgreSQL
+├── dashboard/                dashboard em Next.js (Fase 3)
+│   ├── app/page.tsx          página: filtros, cartões e os 4 indicadores
+│   ├── lib/consultas.ts      consultas SQL ao banco
+│   ├── lib/filtros.ts        leitura e validação dos filtros da URL
+│   ├── lib/db.ts             conexão com TLS e usuário de leitura
+│   └── components/           filtros e gráficos (Recharts)
 ├── sql/schema.sql            tabelas, chaves, restrições e views
 ├── data/
 │   ├── raw/                  extrato original do painel, sem tratamento
@@ -49,13 +62,15 @@ flowchart LR
 │   ├── versions.tf           versões do Terraform e dos providers
 │   ├── variables.tf          parâmetros (projeto, região, plano, IPs liberados...)
 │   ├── main.tf               serviço PostgreSQL, banco e usuário de leitura
-│   ├── arquivos_locais.tf    gera o .env e o ca.pem usados pelo ETL
+│   ├── arquivos_locais.tf    gera o .env e o ca.pem do ETL e o dashboard/.env.local
+│   ├── vercel.tf             projeto do dashboard na Vercel e suas variáveis
 │   ├── outputs.tf            host, porta e URLs de conexão (sensíveis)
 │   ├── terraform.tfvars.example
 │   └── tests/                testes do Terraform com providers simulados
 ├── tests/                    testes do ETL e do banco
 ├── docs/AI_04_Fase_3_do_projeto.pdf  relatório da entrega (ABNT)
-├── .github/workflows/        CI: testes, validação do Terraform e busca de segredos
+├── docs/dashboard.png        print do dashboard
+├── .github/workflows/        CI: testes, build do dashboard, validação do Terraform e busca de segredos
 ├── .env.example              modelo do arquivo de credenciais, sem valores
 ├── .gitleaksignore           exceção justificada da busca de segredos
 └── requirements.txt
@@ -281,7 +296,8 @@ Tipos: `SMALLINT` para ano e chaves das dimensões, `NUMERIC(16,2)` para dinheir
 | Região | `do-nyc` (DigitalOcean, Nova York) | O Aiven só cria serviços gratuitos na DigitalOcean e na UpCloud, e nenhuma das duas tem região na América do Sul. Tentamos `aws-us-east-1` e a API recusou (`Free plans are available in cloud(s): DigitalOcean,UpCloud`); Nova York é a opção gratuita mais próxima de Salvador |
 | Infraestrutura como código | Terraform 1.7+ com os providers `aiven/aiven` (~> 4.65), `hashicorp/random` (~> 3.7) e `hashicorp/local` (~> 2.5) | O provider oficial do Aiven cobre serviço, banco e usuários; o `random` gera a senha do usuário de leitura; o `local` grava os arquivos de conexão que o ETL lê |
 | Tratamento e carga | Python 3.14, pandas, requests e pg8000 | O pg8000 é Python puro: o psycopg teve a DLL bloqueada pelo Controle de Aplicativos do Windows em uma das máquinas da equipe |
-| Integração contínua | GitHub Actions | Roda os testes, valida o Terraform e procura segredos em cada push e pull request |
+| Integração contínua | GitHub Actions | Roda os testes, faz o build do dashboard, valida o Terraform e procura segredos em cada push e pull request |
+| Dashboard | Next.js 16, Recharts e o driver `postgres`, na Vercel (plano Hobby) | Ver [10.3](#103-decisões-técnicas). A Vercel tem provider oficial de Terraform e publica a cada push |
 
 Custo: R$ 0. Limites do plano gratuito que importam aqui: 1 CPU, 1 GB de RAM, 1 GB de disco, 20 conexões simultâneas e um único serviço PostgreSQL gratuito por organização. O Aiven pode desligar serviços gratuitos parados; para religar, use o console (o Terraform não liga nem desliga serviços).
 
@@ -297,10 +313,15 @@ Todos em `infra/terraform/`:
 | `random_password` | `leitura` | Senha de 24 caracteres para o usuário de leitura |
 | `aiven_pg_user` | `leitura` | Usuário `analise_leitura`, para as próximas fases |
 | `local_sensitive_file` | `env`, `ca` | `.env` (permissão 0600) e `ca.pem` na raiz do repositório |
+| `local_sensitive_file` | `env_dashboard` | `dashboard/.env.local` (permissão 0600), para rodar o dashboard localmente |
+| `vercel_project` | `dashboard` | Projeto `fomento-cnpq-dashboard` ligado ao GitHub, pasta `dashboard/`, funções em `iad1` (Washington, a região mais próxima do banco em Nova York) |
+| `vercel_project_environment_variable` | `database_url`, `pg_ca` | URL do usuário de leitura e certificado da CA, marcados como sensíveis |
 
 O banco usado na entrega foi criado com esse código, na conta de um integrante: serviço `pg-fomento-cnpq`, plano `free-1-1gb`, região `do-nyc`, PostgreSQL 17. Depois do `apply`, um novo `terraform plan` não mostra nenhuma mudança pendente.
 
 O `cloud_name` está em `ignore_changes` porque o Aiven pode trocar a região de serviços gratuitos. Sem isso, o próximo `terraform plan` tentaria migrar o banco de volta.
+
+Os recursos da Vercel só existem com `criar_dashboard = true` (padrão). Com `false` o Terraform provisiona apenas o banco e não pede o token da Vercel.
 
 A única variável obrigatória é `projeto_aiven`; as demais têm padrão (ver `variables.tf`). As saídas são `host`, `porta`, `banco`, `usuario_carga`, `usuario_leitura` e as duas URLs de conexão, marcadas como `sensitive`.
 
@@ -311,6 +332,8 @@ A única variável obrigatória é `projeto_aiven`; as demais têm padrão (ver 
 | Credencial | Quem gera | Onde fica | Versionada? |
 |---|---|---|---|
 | Token da API do Aiven | Cada integrante, no console do Aiven (perfil do usuário, Tokens) | Só na variável de ambiente `AIVEN_TOKEN` do terminal | Não |
+| Token da API da Vercel | Quem publica o dashboard, em Account Settings, Tokens | Só na variável de ambiente `VERCEL_API_TOKEN` do terminal | Não |
+| URL de leitura e CA no dashboard | Terraform, a partir do Aiven | Variáveis sensíveis da Vercel e `dashboard/.env.local` | Não |
 | Senha do `avnadmin` (usada na carga) | Aiven, ao criar o serviço | `terraform.tfstate` e `.env` locais | Não |
 | Senha do `analise_leitura` | Terraform (`random_password`) | `terraform.tfstate` e `.env` locais | Não |
 | Certificado da CA (`ca.pem`) | Aiven | Raiz do repositório, gerado pelo Terraform | Não |
@@ -326,7 +349,8 @@ A senha de leitura começou sendo gerada pelo Aiven, mas a API passou a devolver
 - **Saídas sensíveis.** As URLs de conexão são `sensitive` e não aparecem no `plan` nem no `apply`. Para ver é preciso pedir (`terraform output -raw database_url`).
 - **TLS com verificação.** O `carregar.py` conecta com `ssl.create_default_context(cafile="ca.pem")`, que confere a cadeia do certificado e o nome do servidor. Sem o `ca.pem` a carga não roda.
 - **Menor privilégio.** O `avnadmin` só é usado na carga. Consultas e painéis das próximas fases usam o `analise_leitura`, que recebe apenas `USAGE` no schema e `SELECT` nas tabelas e views. Os testes confirmam que ele lê tudo mas não consegue apagar dados nem criar tabelas.
-- **Filtro de IP.** A variável `ips_liberados` define quem pode conectar. O padrão `0.0.0.0/0` existe porque a equipe trabalha de redes diferentes (casa, faculdade, 4G); com IPs fixos, basta trocar e rodar `terraform apply`.
+- **Filtro de IP.** A variável `ips_liberados` define quem pode conectar. O padrão `0.0.0.0/0` existe porque a equipe trabalha de redes diferentes (casa, faculdade, 4G) e porque as funções da Vercel não têm IP fixo no plano gratuito. A proteção do banco fica na senha forte, no TLS com verificação e no usuário só de leitura.
+- **Dashboard.** Conecta com o `analise_leitura` e confere o certificado do servidor (`ssl.ca`, `rejectUnauthorized`). As consultas são parametrizadas pelo driver e os filtros da URL passam por uma lista de valores permitidos (`dashboard/lib/filtros.ts`); valor desconhecido vira "Todos". As variáveis na Vercel são `sensitive` e não podem ser lidas de volta no painel.
 - **State local.** O `terraform.tfstate` guarda as senhas em texto puro, por isso não é versionado e fica só na máquina de quem aplicou. Se o projeto crescer, o próximo passo é um backend remoto com criptografia e controle de acesso (S3 com KMS ou HCP Terraform).
 - **Busca de segredos.** O CI roda o [gitleaks](https://github.com/gitleaks/gitleaks) sobre todo o histórico. A única ocorrência é o `RESOURCE_KEY` em `etl/extrair_painel.py`, que não é credencial: é a chave pública do relatório Power BI publicado na web, a mesma que está no link incorporado da página do painel no gov.br. Ela está liberada no `.gitleaksignore` com essa justificativa.
 - **LGPD.** Sexo e raça/cor só existem no banco de forma agregada; não há como ligar esses atributos a um processo ou pessoa.
@@ -334,9 +358,10 @@ A senha de leitura começou sendo gerada pelo Aiven, mas a API passou a devolver
 ### 6.3 Se uma credencial vazar
 
 1. Token do Aiven: revogar no console e gerar outro.
-2. Senha do `analise_leitura`: `terraform apply -replace=random_password.leitura` sorteia uma senha nova, atualiza o usuário no Aiven e reescreve o `.env`.
-3. Senha do `avnadmin`: redefinir na aba Users do serviço, no console, e rodar `terraform apply`, que lê a senha nova e reescreve o `.env`.
-4. Se o segredo chegou a ser commitado, apagar o commit não resolve: a credencial precisa ser trocada.
+2. Senha do `analise_leitura`: `terraform apply -replace=random_password.leitura` sorteia uma senha nova, atualiza o usuário no Aiven, reescreve o `.env` e atualiza a variável na Vercel (o dashboard passa a usar a senha nova no próximo deploy).
+3. Token da Vercel: revogar em Account Settings, Tokens, e gerar outro.
+4. Senha do `avnadmin`: redefinir na aba Users do serviço, no console, e rodar `terraform apply`, que lê a senha nova e reescreve o `.env`.
+5. Se o segredo chegou a ser commitado, apagar o commit não resolve: a credencial precisa ser trocada.
 
 ## 7. Execução
 
@@ -347,8 +372,10 @@ A senha de leitura começou sendo gerada pelo Aiven, mas a API passou a devolver
 | Python | 3.14 | ETL e testes |
 | [uv](https://docs.astral.sh/uv/) ou pip | recente | Ambiente virtual e dependências |
 | pandas, requests, pg8000 | ver `requirements.txt` | Tratamento, extração e carga |
-| Terraform | 1.7 ou mais novo (testado no 1.16) | Provisionar o banco |
+| Terraform | 1.7 ou mais novo (testado no 1.16) | Provisionar o banco e o projeto na Vercel |
 | Conta no Aiven | plano gratuito | Hospedar o PostgreSQL |
+| Node.js | 24 | Dashboard |
+| Conta na Vercel | plano Hobby, com o app da Vercel instalado no GitHub do repositório | Publicar o dashboard |
 
 ### 7.2 Sequência
 
@@ -400,7 +427,9 @@ terraform -chdir=infra/terraform apply
 
 No PowerShell, o token entra com `$env:AIVEN_TOKEN = Read-Host "Token do Aiven" -MaskInput`.
 
-O `apply` demora alguns minutos (é o tempo de o serviço subir) e no fim cria o `.env` e o `ca.pem` na raiz do repositório.
+O `apply` também cria o projeto do dashboard na Vercel, então precisa do token dela no mesmo terminal (`read -rs VERCEL_API_TOKEN && export VERCEL_API_TOKEN`). Para provisionar só o banco, use `-var criar_dashboard=false`.
+
+O `apply` demora alguns minutos (é o tempo de o serviço subir) e no fim cria o `.env` e o `ca.pem` na raiz do repositório e o `dashboard/.env.local`.
 
 Se o serviço gratuito já existir (criado antes pelo console), não tente criar outro: o Aiven só permite um por organização. Importe o serviço para o Terraform e rode o `apply`, que cria apenas o banco, o usuário de leitura e os arquivos:
 
@@ -426,7 +455,11 @@ Recria o esquema, carrega os sete arquivos numa única transação (se algo falh
 terraform -chdir=infra/terraform test
 ```
 
-**8. Remover a infraestrutura, quando o projeto acabar**
+**8. Dashboard**
+
+Ver [10.4](#104-como-publicar-e-rodar).
+
+**9. Remover a infraestrutura, quando o projeto acabar**
 
 ```bash
 terraform -chdir=infra/terraform destroy
@@ -448,24 +481,100 @@ psql "$(grep '^DATABASE_URL_LEITURA=' .env | cut -d= -f2-)" \
 | `tests/test_extrair_painel.py` | Decodificação do formato DSR do Power BI e montagem da consulta | 8 |
 | `tests/test_tratar.py` | Cada regra de limpeza isolada e as invariantes da base tratada (UF coerente com a região, uma grafia por cidade, valores positivos, linhas removidas explicadas pelo log...) | 29 |
 | `tests/test_banco.py` | Linhas no banco iguais às dos arquivos, taxa gerada, views, reconciliação, tamanho e permissões do usuário de leitura | 8 |
-| `infra/terraform/tests/banco.tftest.hcl` | Plano gratuito, nome do banco, `.env` com senha codificada e permissão 0600, validação dos IPs | 4 |
+| `infra/terraform/tests/banco.tftest.hcl` | Plano gratuito, nome do banco, `.env` com senha codificada e permissão 0600, validação dos IPs, projeto da Vercel na pasta e região certas, variáveis sensíveis com o usuário de leitura, nada da Vercel com `criar_dashboard = false` | 6 |
+| `dashboard/lib/filtros.test.ts` | Filtros válidos aceitos; valores fora da lista, tentativa de injeção e números inválidos ignorados | 3 |
 
 Os testes de banco são pulados sem `.env` e `ca.pem`, e o de comparação com o original é pulado sem o CSV na pasta acima. Os testes do Terraform usam providers simulados (`mock_provider`), então não precisam de conta nem criam nada.
 
-O workflow `.github/workflows/verificacao.yml` roda os testes Python, `terraform fmt`, `validate` e `test`, e o gitleaks em cada push e pull request.
+O workflow `.github/workflows/verificacao.yml` roda os testes Python, lint, testes e build do dashboard, `terraform fmt`, `validate` e `test`, e o gitleaks em cada push e pull request.
 
 ## 9. Limitações
 
 - O painel tem mais propostas que o CSV no mesmo recorte: 184.794 contra 139.761. A diferença aparece em `vw_reconciliacao_fontes` e não foi ajustada artificialmente. A análise de viés usa o painel, que é a fonte com sexo e raça/cor; o CSV serve para conferência e para os recortes por instituição e UF.
 - A extração do painel depende de uma API interna do Power BI, sem documentação, que pode mudar. Por isso o extrato bruto fica em `data/raw/`.
 - Os limites de limpeza (95% para grande área, 10 e 20 vezes a mediana para valores) foram escolhidos olhando a base. Estão como constantes no topo de `tratar.py`, fáceis de revisar.
-- O plano gratuito não tem alta disponibilidade nem SLA, e o serviço pode ser desligado por falta de uso.
+- O plano gratuito não tem alta disponibilidade nem SLA, e o serviço pode ser desligado por falta de uso. Se isso acontecer, o dashboard mostra uma mensagem de erro até o serviço ser religado no console.
+- O banco gratuito aceita 20 conexões. O dashboard usa uma conexão por instância da Vercel, o que basta para a apresentação, mas não para muitos acessos simultâneos.
+- A primeira visita depois de um tempo parado é mais lenta (a função da Vercel e a conexão com o banco precisam subir).
 
-## 10. Referências
+## 10. Dashboard
+
+![Dashboard](docs/dashboard.png)
+
+### 10.1 O que ele mostra
+
+O dashboard lê a tabela `fato_atendimento_grupo` (painel do CNPq, com sexo e raça/cor) a cada acesso. Não há cache: cada troca de filtro gera uma consulta nova, e o rodapé mostra a hora em que o banco foi consultado.
+
+**Filtros dinâmicos:** ano da chamada, sexo, raça/cor, grande área, linha de fomento, modalidade e região. Os filtros ficam na URL (`?area=7&ano=2023`), então qualquer recorte pode ser compartilhado por link.
+
+**Cartões:** propostas submetidas, propostas atendidas, taxa de atendimento e a diferença de taxa entre mulheres negras e homens brancos no recorte escolhido.
+
+### 10.2 Os quatro indicadores
+
+| # | Indicador | Como é calculado | O que responde |
+|---|---|---|---|
+| 1 | Taxa de atendimento por raça/cor e sexo | `soma(qtd_atendida) / soma(qtd_demandada)` por raça/cor, com uma barra para cada sexo | Dentro de cada raça/cor, mulheres e homens têm a mesma chance de ter a proposta aprovada? |
+| 2 | Diferença para os homens brancos, por grande área | Taxa de cada combinação sexo × raça/cor menos a taxa dos homens brancos na mesma grande área, em pontos percentuais. Os homens brancos são a referência por serem o maior grupo (67.042 propostas). A referência é calculada sem os filtros de sexo e raça/cor, para não sumir ao filtrar | Em que áreas e para quais grupos a desvantagem é maior? Células com menos de 30 propostas aparecem claras, porque a taxa é instável |
+| 3 | Participação na demanda e no atendimento | Fatia de cada grupo no total de propostas submetidas e no total de atendidas | O grupo recebe uma fatia das aprovações menor do que a fatia que ele pede? Mostra sub e sobrerrepresentação |
+| 4 | Evolução da taxa, 2019 a 2024 | Taxa por ano para mulheres negras, mulheres brancas, homens negros e homens brancos. Negros = pretos + pardos (critério do IBGE). O filtro de ano não se aplica | A desigualdade está diminuindo ao longo do tempo? |
+
+### 10.3 Decisões técnicas
+
+| Decisão | Motivo |
+|---|---|
+| Next.js com Server Components | A consulta ao banco roda no servidor, então a senha nunca chega ao navegador e não foi preciso escrever uma API separada |
+| Página dinâmica, sem cache (`searchParams` dentro de `<Suspense>`) | O PDF pede consulta em tempo real. O Next 16 gera só a casca estática no build e busca os dados a cada requisição, por isso o build não precisa do banco |
+| Driver `postgres` com `max: 1` | O plano gratuito do Aiven aceita 20 conexões e cada instância da Vercel abre o próprio pool. As consultas usam template com parâmetros, sem concatenar texto |
+| Indicadores calculados por consulta, não por views novas | Nenhuma mudança no banco da Fase 2. As views existentes não respeitam todos os filtros (a `vw_diferenca_grupo` agrupa só por ano e grande área) |
+| Vercel na região `iad1` | É a mais próxima do banco em Nova York; o caminho Vercel → Aiven fica curto |
+| Projeto e variáveis da Vercel no Terraform | A URL de leitura e o certificado vão direto dos outputs do Aiven para a Vercel, sem copiar senha à mão |
+| Animações dos gráficos desligadas | A troca de filtro aparece na hora, o que deixa claro na demonstração que o dado veio de uma consulta nova |
+
+### 10.4 Como publicar e rodar
+
+**Rodar localmente** (depois do `terraform apply` da [seção 7](#7-execução), que gera o `dashboard/.env.local`):
+
+```bash
+npm --prefix dashboard ci && npm --prefix dashboard run dev
+```
+
+Abre em http://localhost:3000. Sem o Terraform, copie `dashboard/.env.example` para `dashboard/.env.local` e preencha a URL de leitura e o conteúdo do `ca.pem`.
+
+**Publicar na Vercel:**
+
+1. Quem administra o repositório no GitHub instala o app da Vercel (Vercel for GitHub) com acesso a ele. Sem isso a Vercel não recebe os pushes.
+2. Com `AIVEN_TOKEN` e `VERCEL_API_TOKEN` no terminal, rode `terraform -chdir=infra/terraform apply`. Ele cria o projeto `fomento-cnpq-dashboard` com a pasta `dashboard/`, Node 24, região `iad1` e as variáveis `DATABASE_URL` e `PG_CA`.
+3. Cada push na branch `main` publica uma versão nova. O primeiro deploy pode ser disparado com um push ou pelo botão Redeploy no painel da Vercel.
+4. O endereço fica em `https://<nome_projeto_vercel>.vercel.app`. Se o nome estiver ocupado, a Vercel adiciona um sufixo; confira no painel e atualize o link no topo deste README.
+
+## 11. Análise crítica: ODS 5 e ODS 18
+
+Números do painel do CNPq, chamadas de 2019 a 2024, 184.794 propostas, sem filtros (os mesmos do dashboard). A ODS 5 trata da igualdade de gênero; a ODS 18, criada pelo Brasil, trata da igualdade étnico-racial.
+
+**Gênero (ODS 5).** As mulheres fazem 42,6% das propostas, mas ficam com 39,2% das aprovações. A taxa delas é 30,8%, contra 35,4% dos homens (−4,6 p.p.). A diferença aparece nas três linhas de fomento: Bolsas no País (31,2% contra 37,5%), Apoio a Projetos (31,8% contra 34,0%) e Bolsas no Exterior (6,5% contra 9,2%). Na bolsa de Produtividade em Pesquisa, que marca o topo da carreira científica, as mulheres são 38,9% da demanda e têm taxa de 37,4%, contra 43,0% dos homens. Pela tabela do indicador 2, a desvantagem das mulheres brancas some nas Humanas, nas Sociais Aplicadas e em Letras (entre −0,6 e +2,1 p.p.), mas chega a −8,6 p.p. nas Agrárias e −8,0 p.p. nas Engenharias.
+
+**Raça/cor (ODS 18).** O primeiro filtro acontece antes da avaliação: pessoas brancas fazem 66,2% das propostas, e pretos e pardos somam 20,0%, enquanto são 55,5% da população no Censo 2022. Depois, a taxa também é menor: 34,2% para brancos, 28,8% para pardos e 26,8% para pretos. Os pardos pedem 16,5% e recebem 14,2% das aprovações; os pretos pedem 3,5% e recebem 2,8%.
+
+**Interseccionalidade.** Os dois efeitos se somam. A taxa é 36,5% para homens brancos, 31,5% para mulheres brancas, 29,8% para homens negros e 26,3% para mulheres negras, uma diferença de 10,2 p.p. entre os extremos. Em todos os seis anos os homens brancos tiveram a maior taxa e as mulheres negras, a menor. Nas Engenharias, mulheres pretas ficam 15,1 p.p. e homens pretos 16,2 p.p. abaixo dos homens brancos.
+
+**Tendência.** A distância entre mulheres negras e homens brancos caiu de 14,9 p.p. em 2019 para 8,9 p.p. em 2024, mas não de forma contínua (6,2 em 2021, 11,7 em 2022, 6,8 em 2023). Há melhora, sem sinal de que a desigualdade esteja perto de acabar.
+
+**Cuidados na leitura.**
+
+- A análise é descritiva. Uma taxa menor não prova discriminação na avaliação: pode refletir diferenças de etapa da carreira, de instituição ou de modalidade pedida, que os dados agregados não permitem controlar. O que os dados mostram é onde a desigualdade aparece e o tamanho dela.
+- 11,8% das propostas não têm raça/cor informada, e esse grupo tem a maior taxa (37,8%). Se ele for composto principalmente por um grupo, as diferenças acima podem estar subestimadas ou superestimadas.
+- Grupos pequenos (indígenas, com 571 propostas, e amarelos, com 3.083) têm taxas instáveis quando recortados por área ou ano.
+- O painel tem mais propostas que o CSV de dados abertos no mesmo recorte (seção 9). A análise usa o painel por ser a única fonte com sexo e raça/cor.
+
+## 12. Referências
 
 - AIVEN. Aiven for PostgreSQL free tier. Disponível em: https://aiven.io/docs/products/postgresql/concepts/pg-free-tier.
 - AIVEN. Aiven Provider for Terraform. Disponível em: https://registry.terraform.io/providers/aiven/aiven/latest/docs.
 - BRASIL. Lei nº 13.709, de 14 de agosto de 2018. Lei Geral de Proteção de Dados Pessoais (LGPD).
 - CNPQ. Painel de Demanda e Atendimento. Disponível em: https://www.gov.br/cnpq/pt-br/acesso-a-informacao/dados-abertos/paineis-de-dados/painel-de-demanda-e-atendimento.
 - HASHICORP. Terraform tests. Disponível em: https://developer.hashicorp.com/terraform/language/tests.
+- IBGE. Censo Demográfico 2022: identificação étnico-racial da população. Rio de Janeiro: IBGE, 2023.
+- BRASIL. Objetivo de Desenvolvimento Sustentável 18: Igualdade Étnico-Racial. Comissão Nacional para os ODS, 2023.
+- NEXT.JS. Documentação. Disponível em: https://nextjs.org/docs.
+- VERCEL. Vercel Provider for Terraform. Disponível em: https://registry.terraform.io/providers/vercel/vercel/latest/docs.
 - KIMBALL, R.; ROSS, M. The Data Warehouse Toolkit. 3. ed. Indianapolis: Wiley, 2013.
