@@ -11,8 +11,8 @@
   --line-strong: #a79f8b;
   --fem: #b2452a;
   --masc: #2b4c73;
-  --demanda: #b8b09f;
-  --atendimento: #1c1b18;
+  --demanda: #309178; /* mesmo matiz, tom médio: o que foi submetido */
+  --atendimento: #174539; /* tom forte: o que foi atendido */
   --abaixo: 178 69 42;
   --acima: 43 76 115;
   --cmp-1: #1f7a62;
@@ -33,8 +33,8 @@
     --line-strong: #5a564a;
     --fem: #e58a6e;
     --masc: #86a9d6;
-    --demanda: #5f5a4d;
-    --atendimento: #ece8dc;
+    --demanda: #2a7e68;
+    --atendimento: #6acdb3;
     --abaixo: 229 138 110;
     --acima: 134 169 214;
     --cmp-1: #4fc2a0;
