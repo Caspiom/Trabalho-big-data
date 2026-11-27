@@ -20,7 +20,7 @@ export default function Page(props: PageProps<"/comparar">) {
       <Cabecalho
         ativo="comparar"
         titulo="Compare grupos lado a lado"
-        texto="Escolha uma dimensão, marque de 2 a 4 valores e veja a taxa de atendimento de cada um. Os filtros à esquerda valem para todos os grupos."
+        texto="Escolha uma dimensão, marque os valores que quiser (ou todos) e veja a taxa de atendimento de cada um. Os filtros à esquerda valem para todos os grupos."
       />
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
         <Suspense fallback={<Esqueleto />}>
