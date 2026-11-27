@@ -3,6 +3,7 @@
 export const ANOS = [2019, 2020, 2021, 2022, 2023, 2024];
 export const SEXOS = ["Feminino", "Masculino", "Não informado"];
 export const RACAS = ["Branca", "Parda", "Preta", "Amarela", "Indígena", "Não informado"];
+export const GRUPOS = ["Mulheres negras", "Mulheres brancas", "Homens negros", "Homens brancos"];
 
 export type Filtros = {
   ano?: number;
@@ -13,6 +14,9 @@ export type Filtros = {
   modalidade?: number;
   regiao?: number;
 };
+
+// Botões de um gráfico: vários valores por dimensão. Ausente = sem seleção (vale o filtro global).
+export type Selecao = { ano?: number[]; sexo?: string[]; raca?: string[]; grupo?: string[] };
 
 type Parametros = Record<string, string | string[] | undefined>;
 
@@ -43,5 +47,20 @@ export function lerFiltros(p: Parametros): Filtros {
     linha: id("linha"),
     modalidade: id("modalidade"),
     regiao: id("regiao"),
+  };
+}
+
+// Parâmetros "<prefixo>_<dimensão>" repetidos (ex.: g1_sexo=Feminino&g1_sexo=Masculino). Só valores das listas fechadas passam.
+export function lerSelecao(p: Parametros, prefixo: string): Selecao {
+  const lista = (chave: string, permitidos: string[]) => {
+    const v = p[`${prefixo}_${chave}`];
+    const valores = [...new Set(Array.isArray(v) ? v : v ? [v] : [])].filter((x) => permitidos.includes(x));
+    return valores.length ? valores : undefined;
+  };
+  return {
+    ano: lista("ano", ANOS.map(String))?.map(Number),
+    sexo: lista("sexo", SEXOS),
+    raca: lista("raca", RACAS),
+    grupo: lista("grupo", GRUPOS),
   };
 }
