@@ -1,16 +1,23 @@
 import { Suspense } from "react";
+import { BotoesGrafico } from "@/components/BotoesGrafico";
 import { Cabecalho } from "@/components/Cabecalho";
 import { Esqueleto } from "@/components/Esqueleto";
-import { Filtros } from "@/components/Filtros";
 import { Barras, Linhas, type Linha } from "@/components/Graficos";
 import { Indicador } from "@/components/Indicador";
-import { diferencaPorArea, evolucao, opcoes, porGrupo, type Diferenca, type Grupo } from "@/lib/consultas";
+import { diferencaPorArea, evolucao, porGrupo, type Diferenca, type Grupo } from "@/lib/consultas";
 import { N_MINIMO } from "@/lib/comparar";
-import { lerFiltros, RACAS } from "@/lib/filtros";
+import { ANOS, GRUPOS, lerSelecao, RACAS, SEXOS, type Selecao } from "@/lib/filtros";
 import { inteiro, pct, pp } from "@/lib/formato";
 
 const RACAS_DECLARADAS = RACAS.filter((r) => r !== "Não informado");
-const GRUPOS_SERIE = ["Mulheres negras", "Mulheres brancas", "Homens negros", "Homens brancos"];
+const SEXOS_DECLARADOS = ["Feminino", "Masculino"];
+const CAMPO_ANO = { chave: "ano", rotulo: "Ano", opcoes: ANOS } as const;
+
+const vazia = (s: Selecao) => Object.values(s).every((v) => v === undefined);
+
+function SemDados() {
+  return <p className="border-y border-line py-10 text-center text-sm text-muted">Sem dados com essa seleção.</p>;
+}
 
 export default function Page(props: PageProps<"/">) {
   return (
@@ -20,8 +27,8 @@ export default function Page(props: PageProps<"/">) {
         titulo="Fomento do CNPq por gênero e raça/cor"
         texto="Auditoria de viés no atendimento das propostas de bolsas e auxílios, chamadas de 2019 a 2024 (ODS 5 e ODS 18). Dados consultados ao vivo no PostgreSQL do Aiven."
       />
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:px-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:gap-12">
-        <Suspense fallback={<Esqueleto />}>
+      <div className="mx-auto max-w-7xl px-4 py-8 sm:px-8">
+        <Suspense fallback={<Esqueleto lateral={false} />}>
           <Painel searchParams={props.searchParams} />
         </Suspense>
       </div>
@@ -30,63 +37,107 @@ export default function Page(props: PageProps<"/">) {
 }
 
 async function Painel({ searchParams }: Pick<PageProps<"/">, "searchParams">) {
-  const filtros = lerFiltros(await searchParams);
-  const [dimensoes, grupos, diferencas, serie] = await Promise.all([
-    opcoes(),
-    porGrupo(filtros),
-    diferencaPorArea(filtros),
-    evolucao(filtros),
+  const params = await searchParams;
+  const [s1, s2, s3, s4] = ["g1", "g2", "g3", "g4"].map((g) => lerSelecao(params, g));
+  // Gráficos sem botões marcados reaproveitam a consulta do total (1 conexão por instância).
+  const base = porGrupo();
+  const [grupos, grupos1, diferencas, grupos3, serie] = await Promise.all([
+    base,
+    vazia(s1) ? base : porGrupo(s1),
+    diferencaPorArea(s2),
+    vazia(s3) ? base : porGrupo(s3),
+    evolucao(s4),
   ]);
+  const series4 = s4.grupo ?? GRUPOS;
   const consultadoEm = new Date().toLocaleTimeString("pt-BR", { timeZone: "America/Bahia" });
 
   return (
-    <>
-      <aside className="lg:sticky lg:top-6 lg:self-start">
-        <Filtros filtros={filtros} {...dimensoes} />
-      </aside>
-      <div className="min-w-0 space-y-12">
-        {grupos.length === 0 ? (
-          <p className="border-y border-line-strong py-10 text-center text-muted">Nenhuma proposta com esses filtros.</p>
-        ) : (
-          <>
-            <Resumo grupos={grupos} />
+    <div className="space-y-12">
+      {grupos.length === 0 ? (
+        <p className="border-y border-line-strong py-10 text-center text-muted">Nenhuma proposta encontrada no banco.</p>
+      ) : (
+        <>
+          <Resumo grupos={grupos} />
+          <Indicador
+            numero={1}
+            titulo="Taxa de atendimento por raça/cor e sexo"
+            nota="Propostas atendidas ÷ propostas submetidas. Sexo não informado (menos de 0,3% das linhas) fica de fora do gráfico."
+          >
+            {grupos1.length ? (
+              <Barras
+                dados={taxaPorRacaESexo(grupos1, s1.raca ?? RACAS)}
+                x="raca"
+                series={SEXOS_DECLARADOS.filter((s) => !s1.sexo || s1.sexo.includes(s))}
+              />
+            ) : (
+              <SemDados />
+            )}
+            <BotoesGrafico
+              prefixo="g1"
+              selecao={s1}
+              campos={[
+                { chave: "sexo", rotulo: "Sexo", opcoes: SEXOS_DECLARADOS },
+                { chave: "raca", rotulo: "Raça/cor", opcoes: RACAS },
+                CAMPO_ANO,
+              ]}
+            />
+          </Indicador>
+          <Indicador
+            numero={2}
+            titulo="Diferença de taxa para os homens brancos, por grande área"
+            nota={`Pontos percentuais em relação aos homens brancos (o maior grupo) na mesma área. Células com borda tracejada e itálico têm menos de ${N_MINIMO} propostas e são instáveis: a cor mostra o tamanho da diferença, não a confiança nela.`}
+          >
+            <TabelaDiferencas linhas={diferencas} sexos={s2.sexo} racas={s2.raca} />
+            <BotoesGrafico
+              prefixo="g2"
+              selecao={s2}
+              campos={[
+                { chave: "sexo", rotulo: "Sexo", opcoes: SEXOS_DECLARADOS },
+                { chave: "raca", rotulo: "Raça/cor", opcoes: RACAS_DECLARADAS },
+                CAMPO_ANO,
+              ]}
+            />
+          </Indicador>
+          <div className="grid gap-12 xl:grid-cols-2 xl:gap-10">
             <Indicador
-              numero={1}
-              titulo="Taxa de atendimento por raça/cor e sexo"
-              nota="Propostas atendidas ÷ propostas submetidas. Sexo não informado (menos de 0,3% das linhas) fica de fora do gráfico."
+              numero={3}
+              titulo="Participação na demanda e no atendimento"
+              nota="Quanto cada grupo representa das propostas submetidas e das atendidas. Atendimento menor que a demanda indica sub-representação. Com botões marcados, a participação é calculada só entre os grupos selecionados."
             >
-              <Barras dados={taxaPorRacaESexo(grupos)} x="raca" series={["Feminino", "Masculino"]} />
+              {grupos3.length ? (
+                <Barras dados={participacao(grupos3)} x="grupo" series={["Demanda", "Atendimento"]} horizontal />
+              ) : (
+                <SemDados />
+              )}
+              <BotoesGrafico
+                prefixo="g3"
+                selecao={s3}
+                campos={[
+                  { chave: "sexo", rotulo: "Sexo", opcoes: SEXOS },
+                  { chave: "raca", rotulo: "Raça/cor", opcoes: RACAS },
+                  CAMPO_ANO,
+                ]}
+              />
             </Indicador>
             <Indicador
-              numero={2}
-              titulo="Diferença de taxa para os homens brancos, por grande área"
-              nota={`Pontos percentuais em relação aos homens brancos (o maior grupo) na mesma área. Células com borda tracejada e itálico têm menos de ${N_MINIMO} propostas e são instáveis: a cor mostra o tamanho da diferença, não a confiança nela.`}
+              numero={4}
+              titulo="Evolução da taxa de atendimento, 2019 a 2024"
+              nota="Negros = pretos + pardos (critério do IBGE). Cor = sexo; traço contínuo = negros, tracejado = brancos."
             >
-              <TabelaDiferencas linhas={diferencas} />
+              {serie.length ? <Linhas dados={pivotarSerie(serie)} series={series4} /> : <SemDados />}
+              <BotoesGrafico
+                prefixo="g4"
+                selecao={s4}
+                campos={[{ chave: "grupo", rotulo: "Grupo", opcoes: GRUPOS }, CAMPO_ANO]}
+              />
             </Indicador>
-            <div className="grid gap-12 xl:grid-cols-2 xl:gap-10">
-              <Indicador
-                numero={3}
-                titulo="Participação na demanda e no atendimento"
-                nota="Quanto cada grupo representa das propostas submetidas e das atendidas. Atendimento menor que a demanda indica sub-representação."
-              >
-                <Barras dados={participacao(grupos)} x="grupo" series={["Demanda", "Atendimento"]} horizontal />
-              </Indicador>
-              <Indicador
-                numero={4}
-                titulo="Evolução da taxa de atendimento, 2019 a 2024"
-                nota="Negros = pretos + pardos (critério do IBGE). O filtro de ano não se aplica a esta série. Cor = sexo; traço contínuo = negros, tracejado = brancos."
-              >
-                <Linhas dados={pivotarSerie(serie)} series={GRUPOS_SERIE} />
-              </Indicador>
-            </div>
-          </>
-        )}
-        <footer className="border-t border-line pt-4 text-sm text-muted">
-          Consultado no banco às {consultadoEm} (horário de Salvador).
-        </footer>
-      </div>
-    </>
+          </div>
+        </>
+      )}
+      <footer className="border-t border-line pt-4 text-sm text-muted">
+        Consultado no banco às {consultadoEm} (horário de Salvador).
+      </footer>
+    </div>
   );
 }
 
@@ -134,11 +185,12 @@ function Resumo({ grupos }: { grupos: Grupo[] }) {
 // intensidade vai de 0 a 1; a opacidade máxima vem do tema (--calor-max) para manter o contraste do texto.
 const fundo = (lado: "abaixo" | "acima", intensidade: number) => `rgb(var(--${lado}) / calc(${intensidade} * var(--calor-max)))`;
 
-function TabelaDiferencas({ linhas }: { linhas: Diferenca[] }) {
-  const colunas = ["Feminino", "Masculino"]
-    .flatMap((sexo) => RACAS_DECLARADAS.map((raca) => ({ sexo, raca })))
+function TabelaDiferencas({ linhas, sexos, racas }: { linhas: Diferenca[]; sexos?: string[]; racas?: string[] }) {
+  const colunas = SEXOS_DECLARADOS.filter((s) => !sexos || sexos.includes(s))
+    .flatMap((sexo) => RACAS_DECLARADAS.filter((r) => !racas || racas.includes(r)).map((raca) => ({ sexo, raca })))
     .filter((c) => !(c.sexo === "Masculino" && c.raca === "Branca"));
   const areas = [...new Set(linhas.map((l) => l.area))];
+  if (!colunas.length || !areas.length) return <SemDados />;
   const celula = (area: string, sexo: string, raca: string) =>
     linhas.find((l) => l.area === area && l.sexo === sexo && l.raca_cor === raca);
 
@@ -214,10 +266,10 @@ function TabelaDiferencas({ linhas }: { linhas: Diferenca[] }) {
   );
 }
 
-function taxaPorRacaESexo(grupos: Grupo[]): Linha[] {
-  return RACAS.map((raca) => {
+function taxaPorRacaESexo(grupos: Grupo[], racas: string[]): Linha[] {
+  return racas.map((raca) => {
     const linha: Linha = { raca };
-    for (const sexo of ["Feminino", "Masculino"]) {
+    for (const sexo of SEXOS_DECLARADOS) {
       const g = grupos.find((x) => x.sexo === sexo && x.raca_cor === raca);
       linha[sexo] = g ? g.atendidas / g.demandadas : null;
     }
